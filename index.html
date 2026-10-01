@@ -1,0 +1,736 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Gestor Avanzado de Ganancias y Pérdidas (P&L)</title>
+
+  <!-- FAVICON TEMÁTICO DE VELAS JAPONESAS (CANDLESTICKS TRADING) -->
+  <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%2310b981' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'><line x1='6' y1='2' x2='6' y2='22'/><rect x='4' y='6' width='4' height='10' fill='%2310b981'/><line x1='12' y1='2' x2='12' y2='22'/><rect x='10' y='4' width='4' height='8' fill='%23ef4444' stroke='%23ef4444'/><line x1='18' y1='2' x2='18' y2='22'/><rect x='16' y='10' width='4' height='8' fill='%2310b981'/></svg>">
+
+  <!-- Tailwind CSS CDN -->
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script>
+    tailwind.config = {
+      darkMode: 'class',
+    }
+  </script>
+
+  <!-- React & ReactDOM CDN -->
+  <script src="https://unpkg.com/react@18/umd/react.production.min.js" crossorigin></script>
+  <script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js" crossorigin></script>
+
+  <!-- Recharts CDN -->
+  <script src="https://unpkg.com/prop-types@15.8.1/prop-types.min.js"></script>
+  <script src="https://unpkg.com/recharts@2.12.7/umd/Recharts.js"></script>
+
+  <!-- Babel Standalone -->
+  <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+
+  <!-- Lucide Icons CDN -->
+  <script src="https://unpkg.com/lucide@latest"></script>
+
+  <!-- Exportación PDF -->
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.5.31/jspdf.plugin.autotable.min.js"></script>
+</head>
+<body class="bg-slate-100 dark:bg-slate-900 text-slate-800 dark:text-slate-100 min-h-screen transition-colors duration-200 overflow-x-hidden">
+  <div id="root"></div>
+
+  <script type="text/babel" data-type="module">
+    const { useState, useEffect, useMemo, useRef } = React;
+    const { 
+      BarChart, Bar, Cell, XAxis, YAxis, CartesianGrid, Tooltip: RechartsTooltip, ResponsiveContainer, ReferenceLine, PieChart, Pie
+    } = window.Recharts;
+
+    const Icon = ({ name, className = "w-4 h-4" }) => {
+      useEffect(() => {
+        if (window.lucide) window.lucide.createIcons();
+      }, [name]);
+      return <i data-lucide={name} className={className}></i>;
+    };
+
+    const MONTHS = [
+      "Enero", "Febrero", "Marzo", "Abril", "Mayo", "Junio",
+      "Julio", "Agosto", "Septiembre", "Octubre", "Noviembre", "Diciembre"
+    ];
+
+    const SOURCES = [
+      "Trading Cripto", "Trading Futuros", "Venta Acciones/ETFs", "Dividendos", "Intereses / Staking", "Trading Forex", "Otro"
+    ];
+
+    const COLORS = ['#10b981', '#3b82f6', '#8b5cf6', '#f59e0b', '#ec4899', '#06b6d4', '#64748b'];
+
+    // DATOS DE REGISTRO INICIALES
+    const INITIAL_RECORDS = [
+      { id: "pnl_img_1", date: "2026-09-09", month: "Septiembre", year: 2026, ticker: "CAKE", amount: 11.73, source: "Trading Cripto", notes: "Cant: 21.54 | Costo: $1.71 | Inv: $37.00 | Rend: +31.85%" },
+      { id: "pnl_img_2", date: "2026-09-13", month: "Septiembre", year: 2026, ticker: "ETH", amount: 13.53, source: "Trading Futuros", notes: "Cant: 0.0567 | Costo: $2,465.00 | Inv: $139.00 | Rend: +9.68%" },
+      { id: "pnl_img_3", date: "2026-09-13", month: "Septiembre", year: 2026, ticker: "BP", amount: 23.70, source: "Venta Acciones/ETFs", notes: "Cant: 1.00 | Costo: $6,053.00 | Inv: $6,053.00 | Rend: +0.39%" },
+      { id: "pnl_img_4", date: "2026-09-15", month: "Septiembre", year: 2026, ticker: "ETH", amount: 8.69, source: "Trading Cripto", notes: "Cant: 0.03613 | Costo: $2,370.00 | Inv: $152.53 | Rend: +10.15%" },
+      { id: "pnl_img_5", date: "2026-09-17", month: "Septiembre", year: 2026, ticker: "ETH", amount: 16.92, source: "Trading Cripto", notes: "Cant: 0.06892 | Costo: $2,388.00 | Inv: $161.00 | Rend: +10.28%" },
+      { id: "pnl_img_6", date: "2026-09-19", month: "Septiembre", year: 2026, ticker: "LINK", amount: 79.00, source: "Trading Futuros", notes: "Cant: 49.9169 | Costo: $10.72 | Inv: $503.00 | Rend: +14.76%" },
+      { id: "pnl_img_7", date: "2026-09-23", month: "Septiembre", year: 2026, ticker: "RAY", amount: 23.00, source: "Trading Cripto", notes: "Cant: 288 | Costo: $1.95 | Inv: $561.00 | Rend: +4.10%" },
+      { id: "pnl_prev_1", date: "2026-08-15", month: "Agosto", year: 2026, ticker: "BTC", amount: 145.50, source: "Trading Futuros", notes: "Toma parcial de beneficios" },
+      { id: "pnl_prev_2", date: "2025-12-20", month: "Diciembre", year: 2025, ticker: "ETH", amount: 210.00, source: "Trading Cripto", notes: "Cierre de año 2025" }
+    ];
+
+    // COMPONENTE PERSONALIZADO PARA TOOLTIPS CON ALTO CONTRASTE
+    const CustomTooltip = ({ active, payload, label, isCurrency = true, isPrivate = false }) => {
+      if (active && payload && payload.length) {
+        const val = payload[0].value;
+        const formattedVal = isPrivate 
+          ? '****' 
+          : isCurrency 
+            ? new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD' }).format(val) 
+            : val;
+
+        return (
+          <div className="bg-slate-950 border border-slate-700 p-3 rounded-xl shadow-2xl backdrop-blur-md">
+            <p className="text-xs font-bold text-slate-300 mb-1">{label || payload[0].name}</p>
+            <p className={`text-sm font-black ${val >= 0 ? 'text-emerald-400' : 'text-rose-400'}`}>
+              {payload[0].name ? `${payload[0].name}: ` : ''}{val >= 0 ? '+' : ''}{formattedVal}
+            </p>
+          </div>
+        );
+      }
+      return null;
+    };
+
+    function ProfitLossDashboard() {
+      const fileInputRef = useRef(null);
+
+      const [darkMode, setDarkMode] = useState(() => localStorage.getItem('pnl_standalone_theme') === 'dark' || true);
+      const [isPrivateMode, setIsPrivateMode] = useState(false);
+      const [selectedYear, setSelectedYear] = useState(2026);
+      const [searchTerm, setSearchTerm] = useState('');
+      const [filterSource, setFilterSource] = useState('Todos');
+
+      const [records, setRecords] = useState(() => {
+        try {
+          const saved = localStorage.getItem('standalone_pnl_records_v9');
+          return saved ? JSON.parse(saved) : INITIAL_RECORDS;
+        } catch {
+          return INITIAL_RECORDS;
+        }
+      });
+
+      const [form, setForm] = useState({
+        id: null,
+        date: new Date().toISOString().slice(0, 10),
+        ticker: '',
+        amount: '',
+        source: 'Trading Futuros',
+        notes: ''
+      });
+
+      const [isEditing, setIsEditing] = useState(false);
+
+      useEffect(() => {
+        if (darkMode) {
+          document.documentElement.classList.add('dark');
+          localStorage.setItem('pnl_standalone_theme', 'dark');
+        } else {
+          document.documentElement.classList.remove('dark');
+          localStorage.setItem('pnl_standalone_theme', 'light');
+        }
+      }, [darkMode]);
+
+      useEffect(() => {
+        localStorage.setItem('standalone_pnl_records_v9', JSON.stringify(records));
+      }, [records]);
+
+      const formatCurrency = (val) => {
+        if (isPrivateMode) return '****';
+        return new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD' }).format(val || 0);
+      };
+
+      const handleSaveRecord = (e) => {
+        e.preventDefault();
+        const amt = parseFloat(form.amount);
+        if (isNaN(amt) || !form.date) {
+          alert('Por favor ingresa un monto válido y una fecha.');
+          return;
+        }
+
+        const dateParts = form.date.split('-');
+        const yearNum = parseInt(dateParts[0]);
+        const monthIdx = parseInt(dateParts[1]) - 1;
+        const monthName = MONTHS[monthIdx];
+
+        if (isEditing && form.id) {
+          setRecords(records.map(r => r.id === form.id ? {
+            ...form,
+            amount: amt,
+            ticker: form.ticker.toUpperCase().trim() || 'VARIOS',
+            month: monthName,
+            year: yearNum
+          } : r));
+          setIsEditing(false);
+        } else {
+          const newRec = {
+            id: 'pnl_' + Date.now(),
+            date: form.date,
+            month: monthName,
+            year: yearNum,
+            ticker: form.ticker.toUpperCase().trim() || 'VARIOS',
+            amount: amt,
+            source: form.source,
+            notes: form.notes
+          };
+          setRecords([newRec, ...records]);
+        }
+
+        setForm({
+          id: null,
+          date: new Date().toISOString().slice(0, 10),
+          ticker: '',
+          amount: '',
+          source: 'Trading Futuros',
+          notes: ''
+        });
+      };
+
+      const handleEditRecord = (rec) => {
+        setForm(rec);
+        setIsEditing(true);
+      };
+
+      const handleDeleteRecord = (id) => {
+        if (window.confirm('¿Deseas eliminar este registro de ganancia/pérdida?')) {
+          setRecords(records.filter(r => r.id !== id));
+        }
+      };
+
+      const yearRecords = useMemo(() => {
+        return records.filter(r => r.year === selectedYear);
+      }, [records, selectedYear]);
+
+      const filteredRecords = useMemo(() => {
+        return yearRecords.filter(r => {
+          const matchesSearch = r.ticker.toLowerCase().includes(searchTerm.toLowerCase()) || 
+                                r.notes.toLowerCase().includes(searchTerm.toLowerCase()) ||
+                                r.month.toLowerCase().includes(searchTerm.toLowerCase());
+          const matchesSource = filterSource === 'Todos' || r.source === filterSource;
+          return matchesSearch && matchesSource;
+        });
+      }, [yearRecords, searchTerm, filterSource]);
+
+      const metrics = useMemo(() => {
+        let totalGain = 0;
+        let totalLoss = 0;
+        const tickerGains = {};
+
+        const monthlyTotals = MONTHS.map((m, idx) => {
+          const mRecs = yearRecords.filter(r => r.month === m);
+          const sum = mRecs.reduce((acc, curr) => acc + curr.amount, 0);
+          return { month: m, monthIdx: idx, sum, count: mRecs.length };
+        });
+
+        yearRecords.forEach(r => {
+          if (r.amount > 0) totalGain += r.amount;
+          else if (r.amount < 0) totalLoss += Math.abs(r.amount);
+
+          tickerGains[r.ticker] = (tickerGains[r.ticker] || 0) + r.amount;
+        });
+
+        const netProfit = totalGain - totalLoss;
+        const totalMonthsActive = monthlyTotals.filter(m => m.count > 0).length;
+        const avgMonthly = totalMonthsActive > 0 ? netProfit / totalMonthsActive : 0;
+        const profitFactor = totalLoss > 0 ? (totalGain / totalLoss).toFixed(2) : totalGain > 0 ? 'MAX' : '0.00';
+
+        const sortedTickers = Object.entries(tickerGains).sort((a, b) => b[1] - a[1]);
+        const topAsset = sortedTickers.length > 0 && sortedTickers[0][1] > 0 
+          ? { ticker: sortedTickers[0][0], amount: sortedTickers[0][1] }
+          : null;
+
+        // CÁLCULO DE CRECIMIENTO PORCENTUAL RESPECTO AL MES ANTERIOR DEL MISMO AÑO
+        const activeMonthsYear = monthlyTotals.filter(m => m.count > 0).sort((a, b) => a.monthIdx - b.monthIdx);
+        let monthPctGrowth = null;
+
+        if (activeMonthsYear.length >= 2) {
+          const currentM = activeMonthsYear[activeMonthsYear.length - 1];
+          const prevM = activeMonthsYear[activeMonthsYear.length - 2];
+          const diff = currentM.sum - prevM.sum;
+          
+          let pct = 0;
+          if (prevM.sum !== 0) {
+            pct = ((diff / Math.abs(prevM.sum)) * 100).toFixed(1);
+          } else {
+            pct = diff > 0 ? 100 : -100;
+          }
+
+          monthPctGrowth = {
+            currentMonth: currentM.month,
+            currentVal: currentM.sum,
+            prevMonth: prevM.month,
+            prevVal: prevM.sum,
+            diff,
+            pct: parseFloat(pct)
+          };
+        }
+
+        const sortedBySum = [...monthlyTotals].sort((a, b) => b.sum - a.sum);
+        const bestMonth = sortedBySum[0]?.sum > 0 ? sortedBySum[0] : null;
+
+        return {
+          netProfit,
+          totalGain,
+          totalLoss,
+          avgMonthly,
+          bestMonth,
+          profitFactor,
+          topAsset,
+          monthPctGrowth
+        };
+      }, [yearRecords]);
+
+      const chartData = useMemo(() => {
+        return MONTHS.map(m => {
+          const mRecs = yearRecords.filter(r => r.month === m);
+          const monthNet = mRecs.reduce((acc, curr) => acc + curr.amount, 0);
+
+          return {
+            month: m.slice(0, 3),
+            GananciaMensual: monthNet
+          };
+        });
+      }, [yearRecords]);
+
+      const sourcePieData = useMemo(() => {
+        const map = {};
+        yearRecords.forEach(r => {
+          if (r.amount > 0) {
+            map[r.source] = (map[r.source] || 0) + r.amount;
+          }
+        });
+        return Object.keys(map).map(k => ({ name: k, value: map[k] }));
+      }, [yearRecords]);
+
+      const handleExportBackup = () => {
+        const dataStr = "data:text/json;charset=utf-8," + encodeURIComponent(JSON.stringify(records, null, 2));
+        const dl = document.createElement('a');
+        dl.setAttribute("href", dataStr);
+        dl.setAttribute("download", `Respaldo_PNL_${selectedYear}_${new Date().toISOString().slice(0, 10)}.json`);
+        document.body.appendChild(dl);
+        dl.click();
+        dl.remove();
+      };
+
+      const handleImportBackup = (e) => {
+        const file = e.target.files[0];
+        if (!file) return;
+
+        const reader = new FileReader();
+        reader.onload = (evt) => {
+          try {
+            const imported = JSON.parse(evt.target.result);
+            if (Array.isArray(imported)) {
+              setRecords(imported);
+              alert('¡Historial cargado exitosamente!');
+            }
+          } catch (err) {
+            alert('Error al leer el archivo JSON.');
+          }
+        };
+        reader.readAsText(file);
+      };
+
+      const handleGeneratePDF = () => {
+        const { jsPDF } = window.jspdf;
+        const doc = new jsPDF();
+
+        doc.setFontSize(18);
+        doc.setTextColor(30, 41, 59);
+        doc.text(`Informe de Ganancias y Pérdidas Realizadas (${selectedYear})`, 14, 20);
+
+        doc.setFontSize(10);
+        doc.setTextColor(100, 116, 139);
+        doc.text(`Fecha del Reporte: ${new Date().toLocaleDateString('es-ES')}`, 14, 26);
+
+        doc.setLineWidth(0.5);
+        doc.line(14, 30, 196, 30);
+
+        const summaryData = [
+          ['Resultado Neto', formatCurrency(metrics.netProfit)],
+          ['Ganancias Totales', formatCurrency(metrics.totalGain)],
+          ['Pérdidas Totales', formatCurrency(metrics.totalLoss)],
+          ['Activo Más Lucrativo', metrics.topAsset ? `${metrics.topAsset.ticker} (+${formatCurrency(metrics.topAsset.amount)})` : 'N/A'],
+          ['Factor de Ganancia (Profit Factor)', metrics.profitFactor],
+          ['Variación Mensual (Vs. Mes Anterior)', metrics.monthPctGrowth ? `${metrics.monthPctGrowth.pct}%` : 'N/A'],
+          ['Promedio Mensual', formatCurrency(metrics.avgMonthly)]
+        ];
+
+        doc.autoTable({
+          startY: 35,
+          head: [['Métrica de Desempeño', 'Monto / Valor']],
+          body: summaryData,
+          theme: 'striped',
+          headStyles: { fillColor: [16, 185, 129] }
+        });
+
+        const tableRows = filteredRecords.map(r => [
+          r.date,
+          r.month,
+          r.ticker,
+          r.source,
+          formatCurrency(r.amount),
+          r.notes
+        ]);
+
+        doc.autoTable({
+          startY: doc.lastAutoTable.finalY + 10,
+          head: [['Fecha', 'Mes', 'Ticker', 'Categoría', 'Resultado ($)', 'Notas']],
+          body: tableRows,
+          theme: 'grid',
+          headStyles: { fillColor: [30, 41, 59] },
+          styles: { fontSize: 8 }
+        });
+
+        doc.save(`Reporte_PNL_${selectedYear}.pdf`);
+      };
+
+      return (
+        <div className="p-4 sm:p-8 max-w-7xl mx-auto font-sans">
+          <input type="file" accept=".json" ref={fileInputRef} onChange={handleImportBackup} className="hidden" />
+
+          {/* CABECERA */}
+          <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 mb-8">
+            <div>
+              <div className="flex items-center gap-3">
+                <div className="p-2.5 bg-emerald-500/10 border border-emerald-500/20 rounded-2xl text-emerald-500">
+                  <Icon name="candlestick-chart" className="w-6 h-6" />
+                </div>
+                <div>
+                  <h1 className="text-2xl sm:text-3xl font-black tracking-tight flex items-center gap-2">
+                    Gestor de Ganancias y Pérdidas (P&L)
+                    <button onClick={() => setIsPrivateMode(!isPrivateMode)} className="text-slate-400 hover:text-emerald-500 p-1">
+                      <Icon name={isPrivateMode ? "eye-off" : "eye"} className="w-5 h-5" />
+                    </button>
+                  </h1>
+                  <p className="text-xs sm:text-sm text-slate-500 dark:text-slate-400">Página independiente para el registro, control y análisis de operaciones en el mercado.</p>
+                </div>
+              </div>
+            </div>
+
+            <div className="flex flex-wrap items-center gap-2.5">
+              <select
+                value={selectedYear}
+                onChange={(e) => setSelectedYear(parseInt(e.target.value))}
+                className="bg-white dark:bg-slate-800 border border-slate-300 dark:border-slate-700 font-bold text-sm rounded-xl px-3 py-2 text-emerald-500 focus:outline-none shadow-sm"
+              >
+                <option value={2026}>Año 2026</option>
+                <option value={2025}>Año 2025</option>
+                <option value={2024}>Año 2024</option>
+              </select>
+
+              <button onClick={() => setDarkMode(!darkMode)} className="p-2.5 bg-white dark:bg-slate-800 hover:bg-slate-100 dark:hover:bg-slate-700 border border-slate-200 dark:border-slate-700 rounded-xl transition-all shadow-sm">
+                <Icon name="sun" className="w-4 h-4 text-amber-500" />
+              </button>
+
+              <button onClick={handleGeneratePDF} className="flex items-center gap-2 bg-rose-600 hover:bg-rose-500 text-white font-semibold text-xs px-3.5 py-2.5 rounded-xl shadow-md transition-all">
+                <Icon name="file-text" className="w-4 h-4" />
+                <span>PDF</span>
+              </button>
+
+              <button onClick={handleExportBackup} className="flex items-center gap-2 bg-white dark:bg-slate-800 hover:bg-slate-100 dark:hover:bg-slate-700 border border-slate-200 dark:border-slate-700 text-xs font-semibold px-3.5 py-2.5 rounded-xl transition-all shadow-sm">
+                <Icon name="download" className="w-4 h-4" />
+                <span>Exportar</span>
+              </button>
+
+              <button onClick={() => fileInputRef.current.click()} className="flex items-center gap-2 bg-white dark:bg-slate-800 hover:bg-slate-100 dark:hover:bg-slate-700 border border-slate-200 dark:border-slate-700 text-xs font-semibold px-3.5 py-2.5 rounded-xl transition-all shadow-sm">
+                <Icon name="upload" className="w-4 h-4" />
+                <span>Importar</span>
+              </button>
+            </div>
+          </div>
+
+          {/* TARJETAS DE MÉTRICAS (4 TARJETAS) */}
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 mb-8">
+            <div className="bg-white dark:bg-slate-800 p-5 rounded-2xl border border-slate-200 dark:border-slate-700 shadow-xl">
+              <span className="text-xs font-bold text-slate-400 uppercase tracking-wider block mb-1">Resultado Neto ({selectedYear})</span>
+              <div className={`text-2xl sm:text-3xl font-black ${metrics.netProfit >= 0 ? 'text-emerald-500' : 'text-rose-500'}`}>
+                {metrics.netProfit >= 0 ? '+' : ''}{formatCurrency(metrics.netProfit)}
+              </div>
+              <span className="text-[10px] text-slate-400 mt-2 block">Suma acumulada del año</span>
+            </div>
+
+            <div className="bg-white dark:bg-slate-800 p-5 rounded-2xl border border-slate-200 dark:border-slate-700 shadow-xl">
+              <span className="text-xs font-bold text-slate-400 uppercase tracking-wider block mb-1">Top Activo del Año</span>
+              {metrics.topAsset ? (
+                <div>
+                  <div className="text-xl sm:text-2xl font-black text-amber-500 flex items-center gap-1.5">
+                    <Icon name="award" className="w-5 h-5 text-amber-500" />
+                    <span>{metrics.topAsset.ticker}</span>
+                  </div>
+                  <span className="text-[10px] font-bold text-emerald-500 mt-1 block">
+                    +{formatCurrency(metrics.topAsset.amount)} acumulados
+                  </span>
+                </div>
+              ) : (
+                <div>
+                  <div className="text-sm font-bold text-slate-400 mt-1">Sin cierres (+)</div>
+                  <span className="text-[10px] text-slate-400 mt-1 block">Registra operaciones</span>
+                </div>
+              )}
+            </div>
+
+            {/* NUEVA TARJETA: CRECIMIENTO PORCENTUAL MES A MES */}
+            <div className="bg-white dark:bg-slate-800 p-5 rounded-2xl border border-slate-200 dark:border-slate-700 shadow-xl">
+              <span className="text-xs font-bold text-slate-400 uppercase tracking-wider block mb-1">Crecimiento vs. Mes Anterior</span>
+              {metrics.monthPctGrowth ? (
+                <div>
+                  <div className={`text-2xl sm:text-3xl font-black flex items-center gap-1 ${metrics.monthPctGrowth.pct >= 0 ? 'text-emerald-500' : 'text-rose-500'}`}>
+                    <Icon name={metrics.monthPctGrowth.pct >= 0 ? "trending-up" : "trending-down"} className="w-6 h-6" />
+                    <span>{metrics.monthPctGrowth.pct >= 0 ? '+' : ''}{metrics.monthPctGrowth.pct}%</span>
+                  </div>
+                  <span className="text-[10px] text-slate-400 mt-1 block">
+                    {metrics.monthPctGrowth.currentMonth} vs {metrics.monthPctGrowth.prevMonth} ({metrics.monthPctGrowth.diff >= 0 ? '+' : ''}{formatCurrency(metrics.monthPctGrowth.diff)})
+                  </span>
+                </div>
+              ) : (
+                <div>
+                  <div className="text-sm font-bold text-slate-400 mt-1">Sin meses suficientes</div>
+                  <span className="text-[10px] text-slate-400 mt-1 block">Mínimo 2 meses en {selectedYear}</span>
+                </div>
+              )}
+            </div>
+
+            <div className="bg-white dark:bg-slate-800 p-5 rounded-2xl border border-slate-200 dark:border-slate-700 shadow-xl">
+              <span className="text-xs font-bold text-slate-400 uppercase tracking-wider block mb-1">Promedio Mensual</span>
+              <div className={`text-2xl sm:text-3xl font-black ${metrics.avgMonthly >= 0 ? 'text-emerald-500' : 'text-rose-500'}`}>
+                {formatCurrency(metrics.avgMonthly)}
+              </div>
+              <span className="text-[10px] text-slate-400 mt-2 block">Por mes con actividad</span>
+            </div>
+          </div>
+
+          {/* SECCIÓN DE GRÁFICOS */}
+          <div className="grid grid-cols-1 lg:grid-cols-3 gap-8 mb-8">
+            <div className="lg:col-span-2 bg-white dark:bg-slate-800 p-5 sm:p-6 rounded-2xl border border-slate-200 dark:border-slate-700 shadow-xl">
+              <div className="flex items-center justify-between mb-4 border-b border-slate-200 dark:border-slate-700 pb-3">
+                <h2 className="text-base sm:text-lg font-bold flex items-center gap-2">
+                  <Icon name="bar-chart-2" className="w-5 h-5 text-emerald-500" />
+                  <span>Rendimiento Neto Mensual</span>
+                </h2>
+                {metrics.bestMonth && (
+                  <span className="text-xs font-bold text-emerald-500 bg-emerald-500/10 px-2.5 py-1 rounded-lg border border-emerald-500/20">
+                    🏆 Mejor Mes: {metrics.bestMonth.month} (+{formatCurrency(metrics.bestMonth.sum)})
+                  </span>
+                )}
+              </div>
+
+              <div className="h-64">
+                <ResponsiveContainer width="100%" height="100%">
+                  <BarChart data={chartData}>
+                    <CartesianGrid strokeDasharray="3 3" stroke="#334155" vertical={false} />
+                    <XAxis dataKey="month" stroke="#94a3b8" fontSize={11} />
+                    <YAxis stroke="#94a3b8" fontSize={11} tickFormatter={(v) => `$${v}`} />
+                    <RechartsTooltip content={<CustomTooltip isPrivate={isPrivateMode} />} />
+                    <ReferenceLine y={0} stroke="#64748b" strokeDasharray="3 3" />
+                    <Bar dataKey="GananciaMensual" name="Resultado">
+                      {chartData.map((entry, index) => (
+                        <Cell key={`cell-${index}`} fill={entry.GananciaMensual >= 0 ? '#10b981' : '#ef4444'} />
+                      ))}
+                    </Bar>
+                  </BarChart>
+                </ResponsiveContainer>
+              </div>
+            </div>
+
+            <div className="bg-white dark:bg-slate-800 p-5 rounded-2xl border border-slate-200 dark:border-slate-700 shadow-xl flex flex-col justify-between">
+              <div>
+                <h2 className="text-base font-bold mb-3 pb-2 border-b border-slate-200 dark:border-slate-700 flex items-center gap-2">
+                  <Icon name="pie-chart" className="w-4 h-4 text-blue-500" />
+                  <span>Origen de Ganancias</span>
+                </h2>
+                <div className="h-44">
+                  <ResponsiveContainer width="100%" height="100%">
+                    <PieChart>
+                      <Pie data={sourcePieData} cx="50%" cy="50%" innerRadius={25} outerRadius={45} paddingAngle={4} dataKey="value">
+                        {sourcePieData.map((entry, index) => (
+                          <Cell key={`source-cell-${index}`} fill={COLORS[index % COLORS.length]} />
+                        ))}
+                      </Pie>
+                      <RechartsTooltip content={<CustomTooltip isPrivate={isPrivateMode} />} />
+                    </PieChart>
+                  </ResponsiveContainer>
+                </div>
+              </div>
+
+              <div className="grid grid-cols-2 gap-1.5 pt-2 border-t border-slate-200 dark:border-slate-700 text-[10px]">
+                {sourcePieData.map((item, idx) => (
+                  <div key={item.name} className="flex items-center gap-1.5">
+                    <span className="w-2 h-2 rounded-full" style={{ backgroundColor: COLORS[idx % COLORS.length] }}></span>
+                    <span className="truncate text-slate-400">{item.name}</span>
+                  </div>
+                ))}
+              </div>
+            </div>
+          </div>
+
+          {/* FORMULARIO + HISTORIAL DE OPERACIONES */}
+          <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
+            <div className="bg-white dark:bg-slate-800 p-5 rounded-2xl border border-slate-200 dark:border-slate-700 shadow-xl h-fit">
+              <div className="flex items-center justify-between pb-3 mb-4 border-b border-slate-200 dark:border-slate-700">
+                <h3 className="text-base font-bold flex items-center gap-2">
+                  <Icon name={isEditing ? "edit-3" : "plus-circle"} className="w-5 h-5 text-emerald-500" />
+                  <span>{isEditing ? "Editar Operación" : "Anotar Resultado"}</span>
+                </h3>
+                {isEditing && (
+                  <button onClick={() => { setIsEditing(false); setForm({ id: null, date: new Date().toISOString().slice(0, 10), ticker: '', amount: '', source: 'Trading Futuros', notes: '' }); }} className="text-xs text-slate-400 hover:text-slate-200">
+                    Cancelar
+                  </button>
+                )}
+              </div>
+
+              <form onSubmit={handleSaveRecord} className="space-y-4">
+                <div>
+                  <label className="block text-xs font-semibold text-slate-400 mb-1">Fecha de Operación *</label>
+                  <input
+                    type="date"
+                    value={form.date}
+                    onChange={(e) => setForm({ ...form, date: e.target.value })}
+                    className="w-full bg-slate-50 dark:bg-slate-900 border border-slate-300 dark:border-slate-700 rounded-xl px-3 py-2 text-sm focus:outline-none focus:border-emerald-500"
+                    required
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-xs font-semibold text-slate-400 mb-1">Ticker / Activo (Ej. RAY, LTC, VGT)</label>
+                  <input
+                    type="text"
+                    placeholder="Ej. BTC, JOE, AAPL"
+                    value={form.ticker}
+                    onChange={(e) => setForm({ ...form, ticker: e.target.value })}
+                    className="w-full bg-slate-50 dark:bg-slate-900 border border-slate-300 dark:border-slate-700 rounded-xl px-3 py-2 text-sm uppercase focus:outline-none focus:border-emerald-500"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-xs font-semibold text-slate-400 mb-1">Monto Neto ($) * [Positivo = Ganancia, Negativo = Pérdida]</label>
+                  <input
+                    type="number"
+                    step="any"
+                    placeholder="Ej. 120.50 o -45.00"
+                    value={form.amount}
+                    onChange={(e) => setForm({ ...form, amount: e.target.value })}
+                    className="w-full bg-slate-50 dark:bg-slate-900 border border-slate-300 dark:border-slate-700 rounded-xl px-3 py-2 text-sm font-bold focus:outline-none focus:border-emerald-500"
+                    required
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-xs font-semibold text-slate-400 mb-1">Categoría / Origen</label>
+                  <select
+                    value={form.source}
+                    onChange={(e) => setForm({ ...form, source: e.target.value })}
+                    className="w-full bg-slate-50 dark:bg-slate-900 border border-slate-300 dark:border-slate-700 rounded-xl px-3 py-2 text-sm focus:outline-none focus:border-emerald-500"
+                  >
+                    {SOURCES.map(s => <option key={s} value={s}>{s}</option>)}
+                  </select>
+                </div>
+
+                <div>
+                  <label className="block text-xs font-semibold text-slate-400 mb-1">Notas / Detalle de la Estrategia</label>
+                  <textarea
+                    rows="3"
+                    placeholder="Ej. Cierre parcial, apalancamiento, comisiones, razón del trade..."
+                    value={form.notes}
+                    onChange={(e) => setForm({ ...form, notes: e.target.value })}
+                    className="w-full bg-slate-50 dark:bg-slate-900 border border-slate-300 dark:border-slate-700 rounded-xl px-3 py-2 text-sm focus:outline-none focus:border-emerald-500"
+                  ></textarea>
+                </div>
+
+                <button
+                  type="submit"
+                  className="w-full bg-emerald-600 hover:bg-emerald-500 text-white font-bold py-2.5 rounded-xl transition-all shadow-lg text-sm"
+                >
+                  {isEditing ? "Guardar Cambios" : "Registrar Operación"}
+                </button>
+              </form>
+            </div>
+
+            <div className="lg:col-span-2 bg-white dark:bg-slate-800 p-5 rounded-2xl border border-slate-200 dark:border-slate-700 shadow-xl">
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-4 pb-3 border-b border-slate-200 dark:border-slate-700">
+                <h3 className="text-base font-bold flex items-center gap-2">
+                  <Icon name="list" className="w-5 h-5 text-emerald-500" />
+                  <span>Historial de Registros ({selectedYear})</span>
+                </h3>
+
+                <div className="flex items-center gap-2">
+                  <input
+                    type="text"
+                    placeholder="Buscar por Ticker o Nota..."
+                    value={searchTerm}
+                    onChange={(e) => setSearchTerm(e.target.value)}
+                    className="bg-slate-100 dark:bg-slate-900 border border-slate-300 dark:border-slate-700 rounded-lg px-2.5 py-1 text-xs focus:outline-none w-36 sm:w-48"
+                  />
+                  <select
+                    value={filterSource}
+                    onChange={(e) => setFilterSource(e.target.value)}
+                    className="bg-slate-100 dark:bg-slate-900 border border-slate-300 dark:border-slate-700 rounded-lg px-2 py-1 text-xs focus:outline-none"
+                  >
+                    <option value="Todos">Todas las Categorías</option>
+                    {SOURCES.map(s => <option key={s} value={s}>{s}</option>)}
+                  </select>
+                </div>
+              </div>
+
+              <div className="overflow-x-auto">
+                <table className="w-full text-left border-collapse text-xs">
+                  <thead>
+                    <tr className="border-b border-slate-200 dark:border-slate-700 text-slate-400">
+                      <th className="py-2.5 px-2">Fecha</th>
+                      <th className="py-2.5 px-2">Mes</th>
+                      <th className="py-2.5 px-2">Ticker</th>
+                      <th className="py-2.5 px-2">Categoría</th>
+                      <th className="py-2.5 px-2 text-right">Resultado ($)</th>
+                      <th className="py-2.5 px-3">Notas</th>
+                      <th className="py-2.5 px-2 text-center">Acciones</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-slate-200 dark:divide-slate-700/50">
+                    {filteredRecords.length === 0 ? (
+                      <tr>
+                        <td colSpan="7" className="text-center py-8 text-slate-400 italic">
+                          No hay registros guardados para este filtro.
+                        </td>
+                      </tr>
+                    ) : (
+                      filteredRecords.map((r) => (
+                        <tr key={r.id} className="hover:bg-slate-50 dark:hover:bg-slate-700/30">
+                          <td className="py-2.5 px-2 font-mono text-slate-400">{r.date}</td>
+                          <td className="py-2.5 px-2 font-semibold text-slate-300">{r.month}</td>
+                          <td className="py-2.5 px-2 font-bold text-blue-500">{r.ticker}</td>
+                          <td className="py-2.5 px-2 text-slate-400">{r.source}</td>
+                          <td className={`py-2.5 px-2 text-right font-black ${r.amount >= 0 ? 'text-emerald-500' : 'text-rose-500'}`}>
+                            {r.amount >= 0 ? '+' : ''}{formatCurrency(r.amount)}
+                          </td>
+                          <td className="py-2.5 px-3 text-slate-400 max-w-[150px] truncate" title={r.notes}>{r.notes || '-'}</td>
+                          <td className="py-2.5 px-2 text-center">
+                            <div className="flex items-center justify-center gap-1">
+                              <button onClick={() => handleEditRecord(r)} className="text-slate-400 hover:text-blue-500 p-1" title="Editar">
+                                <Icon name="edit-2" className="w-3.5 h-3.5" />
+                              </button>
+                              <button onClick={() => handleDeleteRecord(r.id)} className="text-slate-400 hover:text-rose-500 p-1" title="Eliminar">
+                                <Icon name="trash-2" className="w-3.5 h-3.5" />
+                              </button>
+                            </div>
+                          </td>
+                        </tr>
+                      ))
+                    )}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          </div>
+        </div>
+      );
+    }
+
+    const root = ReactDOM.createRoot(document.getElementById('root'));
+    root.render(<ProfitLossDashboard />);
+  </script>
+</body>
+</html>
